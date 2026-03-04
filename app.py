@@ -3,10 +3,9 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import datetime
 
-# CONFIGURACIÓN DE PÁGINA
-st.set_page_config(page_title="Movilización Electoral", page_icon="🗳️")
+# CONFIGURACIÓN VISUAL
+st.set_page_config(page_title="Movilización Lista 4", page_icon="🗳️")
 
-# BANNER DE ENCABEZADO
 st.markdown(
     """
     <div style="background-color:#004a99;padding:20px;border-radius:10px;border-left: 8px solid #fdb813;">
@@ -17,44 +16,31 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- SISTEMA DE LOGUEO ---
+# --- SEGURIDAD ---
 if 'autenticado' not in st.session_state:
     st.session_state['autenticado'] = False
 
 if not st.session_state['autenticado']:
     with st.form("login"):
         st.subheader("🔐 Ingreso de Seguridad")
-        usuario = st.text_input("Tu Nombre")
+        usuario = st.text_input("Nombre del Responsable")
         clave = st.text_input("Contraseña", type="password")
-        btn_ingresar = st.form_submit_button("INGRESAR")
-        
-        if btn_ingresar:
+        if st.form_submit_button("INGRESAR"):
             if clave == "lista42026" and usuario != "":
                 st.session_state['autenticado'] = True
                 st.session_state['usuario_nombre'] = usuario
                 st.rerun()
             else:
-                st.error("⚠️ Nombre o Contraseña incorrectos")
+                st.error("Credenciales incorrectas")
     st.stop()
 
-st.success(f"Sesión iniciada: {st.session_state['usuario_nombre']}")
-
-# CONEXIÓN A TU PLANILLA ESPECÍFICA
-URL_PLANILLA = "https://docs.google.com/spreadsheets/d/1IUFHe5MWTbVHBp2cGzC3gGHN2eP3TpHLiaLt9AXlHDw/edit?usp=sharing"
-
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-except:
-    st.error("Error técnico de conexión.")
+# --- CONEXIÓN ---
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 with st.form(key="voto_form", clear_on_submit=True):
-    dni = st.text_input("DNI DEL VOTANTE", placeholder="Ej: 20123456")
-    submit_button = st.form_submit_button(label="✅ REGISTRAR VOTO")
-
-    if submit_button:
-        if not dni:
-            st.warning("⚠️ Por favor, ingresa un DNI.")
-        else:
+    dni = st.text_input("DNI DEL VOTANTE")
+    if st.form_submit_button(label="✅ REGISTRAR VOTO"):
+        if dni:
             nueva_data = pd.DataFrame([{
                 "DNI": dni,
                 "Voto": "VOTÓ",
@@ -62,26 +48,22 @@ with st.form(key="voto_form", clear_on_submit=True):
                 "Fecha_Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
             }])
             try:
-                # Leemos los datos actuales de la planilla
-                df_existente = conn.read(spreadsheet=URL_PLANILLA)
-                # Unimos con el nuevo voto
+                # Al usar los Secrets, no hace falta poner la URL aquí
+                df_existente = conn.read()
                 df_final = pd.concat([df_existente, nueva_data], ignore_index=True)
-                # Subimos la planilla actualizada
-                conn.update(spreadsheet=URL_PLANILLA, data=df_final)
-                st.success(f"¡Registrado con éxito! DNI: {dni}")
+                conn.update(data=df_final)
+                st.success(f"Registrado: {dni}")
                 st.balloons()
             except Exception as e:
-                st.error("Error de escritura. Revisa los permisos en Google Sheets (Cualquier persona -> EDITOR).")
+                st.error("Error de permisos. Revisá los Secrets y que el Excel sea Editor.")
+        else:
+            st.warning("Falta el DNI")
 
-# AUDITORÍA EN LA BARRA LATERAL
+# AUDITORÍA
 if st.sidebar.checkbox("Ver Auditoría"):
     try:
-        data = conn.read(spreadsheet=URL_PLANILLA)
-        st.sidebar.metric("Total Votos", len(data))
-        st.write("### Últimos Registros", data.tail(5))
+        data = conn.read()
+        st.sidebar.metric("Total", len(data))
+        st.write(data.tail(5))
     except:
-        st.sidebar.write("Cargando datos...")
-
-if st.sidebar.button("Cerrar Sesión"):
-    st.session_state['autenticado'] = False
-    st.rerun()
+        st.sidebar.write("Sin datos.")
