@@ -5,7 +5,7 @@ import datetime
 
 st.set_page_config(page_title="Movilización Lista 4")
 
-# BANNER
+# ENCABEZADO
 st.markdown('<div style="background-color:#004a99;padding:20px;border-radius:10px;"><h1 style="color:white;text-align:center;">PERONISMO DE TODOS</h1><h3 style="color:#fdb813;text-align:center;">Movilización Electoral - Lista 4</h3></div>', unsafe_allow_html=True)
 
 # LOGIN
@@ -22,14 +22,13 @@ if not st.session_state['auth']:
             else: st.error("Clave incorrecta")
     st.stop()
 
-# CONEXIÓN USANDO SECRETS
+# CONEXIÓN
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
     with st.form(key="votos", clear_on_submit=True):
         dni = st.text_input("DNI DEL VOTANTE")
         if st.form_submit_button("✅ REGISTRAR VOTO"):
             if dni:
-                # El comando .read() sin nada adentro busca automáticamente los SECRETS
                 df = conn.read()
                 nuevo = pd.DataFrame([{"DNI": dni, "Voto": "VOTÓ", "Responsable": st.session_state['u'], "Fecha_Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")}])
                 df_final = pd.concat([df, nuevo], ignore_index=True)
@@ -38,5 +37,4 @@ try:
                 st.balloons()
             else: st.warning("Falta el DNI")
 except Exception as e:
-    st.error(f"Error técnico: {e}")
-    st.info("Revisa que los SECRETS estén guardados y el Excel sea EDITOR.")
+    st.info("Por favor, hacé clic en el botón de abajo para autorizar el acceso a la planilla.")
