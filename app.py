@@ -6,7 +6,19 @@ import datetime
 # CONFIGURACIÓN DE PÁGINA
 st.set_page_config(page_title="Movilización Lista 4", layout="centered")
 
-# ENCABEZADO
+# --- PASO 1: FORZAR CONEXIÓN CON GOOGLE ---
+# Esto se pone antes de cualquier diseño para que el botón no se esconda
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+try:
+    # Intentamos una lectura mínima para disparar el botón azul de 'Connect'
+    test_df = conn.read(nrows=1)
+    st.sidebar.success("✅ Google Sheets Conectado")
+except Exception:
+    st.warning("⚠️ IMPORTANTE: Haz clic en el botón azul 'Connect to Google Sheets' que aparece aquí abajo para activar el sistema.")
+    # El botón aparecerá aquí automáticamente por el comando conn.read()
+
+# --- DISEÑO DEL BANNER ---
 st.markdown(
     """
     <div style="background-color:#004a99;padding:20px;border-radius:10px;border-left: 8px solid #fdb813;">
@@ -17,18 +29,9 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- PASO 1: CONEXIÓN OBLIGATORIA ---
-st.info("🔌 Paso 1: Haz clic en el botón de abajo para autorizar el acceso al Excel.")
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    # Forzamos una lectura de prueba para que aparezca el botón de Google
-    test_read = conn.read(nrows=1)
-except Exception as e:
-    st.warning("Esperando conexión con Google Sheets...")
+st.write("")
 
-st.markdown("---")
-
-# --- PASO 2: SEGURIDAD (PASSWORD) ---
+# --- PASO 2: SEGURIDAD (CONTRASEÑA) ---
 if 'auth' not in st.session_state:
     st.session_state['auth'] = False
 
@@ -43,7 +46,7 @@ if not st.session_state['auth']:
                 st.session_state['u'] = usuario
                 st.rerun()
             else:
-                st.error("Nombre o Contraseña incorrectos")
+                st.error("⚠️ Nombre o Contraseña incorrectos")
     st.stop()
 
 # --- PASO 3: FORMULARIO DE CARGA ---
@@ -54,13 +57,16 @@ with st.form(key="votos", clear_on_submit=True):
     if st.form_submit_button("✅ REGISTRAR VOTO"):
         if dni:
             try:
+                # Leemos la planilla actualizada
                 df = conn.read()
+                # Creamos el nuevo registro
                 nuevo = pd.DataFrame([{
                     "DNI": dni, 
                     "Voto": "VOTÓ", 
                     "Responsable": st.session_state['u'], 
                     "Fecha_Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 }])
+                # Unimos y subimos
                 df_final = pd.concat([df, nuevo], ignore_index=True)
                 conn.update(data=df_final)
                 st.success(f"¡Registrado con éxito! DNI: {dni}")
@@ -70,7 +76,6 @@ with st.form(key="votos", clear_on_submit=True):
         else:
             st.warning("Por favor, ingresa un DNI.")
 
-# CERRAR SESIÓN
-if st.button("Salir / Cambiar de Chofer"):
+if st.sidebar.button("Cerrar Sesión"):
     st.session_state['auth'] = False
     st.rerun()
