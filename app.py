@@ -4,11 +4,7 @@ import pandas as pd
 import datetime
 
 # CONFIGURACIÓN DE PÁGINA
-st.set_page_config(
-    page_title="Movilización Electoral",
-    page_icon="🗳️",
-    layout="centered"
-)
+st.set_page_config(page_title="Movilización Electoral", page_icon="🗳️")
 
 # BANNER DE ENCABEZADO
 st.markdown(
@@ -21,61 +17,70 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-st.write("") 
+# --- SISTEMA DE LOGUEO ---
+if 'autenticado' not in st.session_state:
+    st.session_state['autenticado'] = False
 
-# CONEXIÓN A GOOGLE SHEETS
+if not st.session_state['autenticado']:
+    with st.form("login"):
+        st.subheader("🔐 Ingreso de Seguridad - Lista 4")
+        usuario = st.text_input("Tu Nombre")
+        clave = st.text_input("Contraseña de Campaña", type="password")
+        btn_ingresar = st.form_submit_button("INGRESAR")
+        
+        if btn_ingresar:
+            if clave == "lista42026" and usuario != "":
+                st.session_state['autenticado'] = True
+                st.session_state['usuario_nombre'] = usuario
+                st.rerun()
+            else:
+                st.error("⚠️ Nombre o Contraseña incorrectos")
+    st.stop()
+
+st.success(f"Sesión iniciada: {st.session_state['usuario_nombre']}")
+
+# CONEXIÓN CORREGIDA
+# He quitado la dependencia de 'conn' para usar una carga más directa
+URL_PLANILLA = "https://docs.google.com/spreadsheets/d/1Bf8I-oO_Kz-N_8fKscM8-X9Xm-7BIdYvE0N99_l8I6E/edit#gid=0"
+
+# Intentamos conectar
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
-except Exception as e:
-    st.error("Error de conexión. Verifica las credenciales.")
-
-# CUERPO DE LA APP
-st.info("Registro rápido de votantes en territorio")
+except:
+    st.error("Error técnico de conexión.")
 
 with st.form(key="voto_form", clear_on_submit=True):
-    dni = st.text_input("DNI DEL VOTANTE", placeholder="Ej: 20123456")
-    responsable = st.selectbox(
-        "RESPONSABLE DE CARGA", 
-        ["Seleccione su nombre", "Juan Perez", "Maria Garcia", "Pedro Rodriguez", "Equipo 1", "Equipo 2"]
-    )
+    dni = st.text_input("DNI DEL VOTANTE", placeholder="Sin puntos ni espacios")
     submit_button = st.form_submit_button(label="✅ REGISTRAR VOTO")
 
     if submit_button:
-        if not dni or responsable == "Seleccione su nombre":
-            st.warning("⚠️ Por favor, completa el DNI y selecciona tu nombre.")
+        if not dni:
+            st.warning("⚠️ Ingresa un DNI.")
         else:
             nueva_data = pd.DataFrame([{
                 "DNI": dni,
                 "Voto": "VOTÓ",
-                "Responsable": responsable,
+                "Responsable": st.session_state['usuario_nombre'],
                 "Fecha_Hora": datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
             }])
             try:
-                existing_data = conn.read()
-                updated_df = pd.concat([existing_data, nueva_data], ignore_index=True)
-                conn.update(data=updated_df)
+                # LEER DATOS USANDO LA URL DIRECTA
+                df_existente = conn.read(spreadsheet=URL_PLANILLA, usecols=[0,1,2,3])
+                df_final = pd.concat([df_existente, nueva_data], ignore_index=True)
+                
+                # ACTUALIZAR
+                conn.update(spreadsheet=URL_PLANILLA, data=df_final)
                 st.success(f"¡Registrado con éxito! DNI: {dni}")
                 st.balloons()
             except Exception as e:
-                st.error("Error al guardar. Revisa que el Excel esté compartido como Editor.")
+                st.error("Error de permisos de Google. La planilla debe estar en 'Cualquier persona con el enlace' -> EDITOR.")
+                st.info("Si el error persiste, es necesario configurar los SECRETS de Streamlit para dar permiso total.")
 
-# --- PANEL DE AUDITORÍA ---
-st.sidebar.title("Panel de Control")
-
-if st.sidebar.checkbox("Ver Auditoría en Vivo"):
-    st.sidebar.markdown("---")
+# AUDITORÍA
+if st.sidebar.checkbox("Ver Auditoría"):
     try:
-        data_audit = conn.read()
-        if not data_audit.empty:
-            st.sidebar.metric("Total de Votos", len(data_audit))
-            st.write("### Últimos Registros")
-            st.dataframe(data_audit.tail(5))
-            st.write("### Votos por Responsable")
-            st.bar_chart(data_audit['Responsable'].value_counts())
-        else:
-            st.sidebar.write("Aún no hay datos.")
-    except Exception as e:
-        st.sidebar.write("Error al cargar auditoría.")
-
-st.markdown("---")
-st.caption("Sistema Territorial - Peronismo de Todos © 2026")
+        data = conn.read(spreadsheet=URL_PLANILLA)
+        st.sidebar.metric("Total Votos", len(data))
+        st.write("### Últimos Movimientos", data.tail(5))
+    except:
+        st.sidebar.write("Cargando datos...")
